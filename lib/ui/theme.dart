@@ -1,8 +1,29 @@
 import 'package:flutter/material.dart';
 
+import '../core/brand.dart';
+
 ThemeData buildTheme(Brightness brightness, Color seed) {
-  final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
-  final base = ThemeData(colorScheme: scheme, useMaterial3: true, brightness: brightness);
+  var scheme = ColorScheme.fromSeed(
+    seedColor: seed,
+    brightness: brightness,
+    // Keeps the primary close to the chosen accent instead of a muted tone.
+    dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+  );
+  if (brightness == Brightness.dark) {
+    // Burrow's dark mode sits on deep ink rather than neutral grey.
+    scheme = scheme.copyWith(
+      surface: Brand.ink,
+      surfaceContainerLowest: const Color(0xFF0F0D17),
+      surfaceContainerLow: const Color(0xFF1C1829),
+      surfaceContainer: const Color(0xFF211D30),
+      surfaceContainerHigh: const Color(0xFF2A2540),
+      surfaceContainerHighest: const Color(0xFF332D4B),
+      onSurface: const Color(0xFFF3EFFA),
+      onSurfaceVariant: const Color(0xFFB9B2CC),
+      outlineVariant: const Color(0xFF3A3452),
+    );
+  }
+  final base = ThemeData(colorScheme: scheme, useMaterial3: true, brightness: brightness, fontFamily: Brand.fontFamily);
   return base.copyWith(
     scaffoldBackgroundColor: scheme.surface,
     appBarTheme: AppBarTheme(

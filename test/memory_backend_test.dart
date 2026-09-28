@@ -72,4 +72,33 @@ void main() {
     expect(safeArchivePath('/abs/x'), 'abs/x');
     expect(archiveBaseName('photos.tar.gz'), 'photos');
   });
+
+  test('folder item count ignores hidden files unless they are shown', () async {
+    await fs.createFolder('/', 'Secret');
+    await fs.writeBytes('/Secret/.nomedia', text(''));
+    await fs.writeBytes('/Secret/.cache', text('x'));
+
+    Future<int> countFor({required bool showHidden}) async =>
+        (await fs.list('/', showHidden: showHidden)).firstWhere((e) => e.name == 'Secret').size;
+
+    expect(await countFor(showHidden: false), 0);
+    expect(await fs.list('/Secret'), isEmpty);
+    expect(await countFor(showHidden: true), 2);
+    expect(await fs.list('/Secret', showHidden: true), hasLength(2));
+  });
+
+  test('readHead returns only the start of a file', () async {
+    await fs.writeBytes('/big.txt', text('0123456789'));
+    expect(utf8.decode(await fs.readHead('/big.txt', 4)), '0123');
+    expect(utf8.decode(await fs.readHead('/big.txt', 100)), '0123456789');
+  });
+
+  test('archive entries can be listed without extracting', () async {
+    final zip = ZipEncoder().encode(Archive()..add(ArchiveFile.bytes('docs/a.txt', text('hello'))));
+    await fs.writeBytes('/pack.zip', Uint8List.fromList(zip));
+    final entry = (await fs.stat('/pack.zip'))!;
+    final listing = await fs.listArchiveEntries(entry);
+    expect(listing.single.name, 'docs/a.txt');
+    expect(listing.single.size, 5);
+  });
 }

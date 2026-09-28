@@ -15,16 +15,29 @@ Future<void> initDateFormatting(String? deviceLocale) async {
   } catch (_) {}
 }
 
+/// Human-readable size in decimal units (1 KB = 1000 bytes), matching how
+/// Android and iOS report storage.
 String formatBytes(int bytes) {
-  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1000) return '$bytes B';
   const units = ['KB', 'MB', 'GB', 'TB'];
-  double value = bytes / 1024;
+  double value = bytes / 1000;
   var unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
     unit++;
   }
   return '${value.toStringAsFixed(value >= 100 ? 0 : 1)} ${units[unit]}';
+}
+
+/// "1,911" in the device's locale.
+String formatCount(int n) => NumberFormat.decimalPattern(_locale).format(n);
+
+/// Marketed capacity in decimal units, as printed on the box: "128 GB".
+String formatCapacity(int bytes) {
+  const gb = 1000 * 1000 * 1000;
+  if (bytes >= 1000 * gb) return '${(bytes / (1000 * gb)).toStringAsFixed(bytes % (1000 * gb) == 0 ? 0 : 1)} TB';
+  if (bytes >= gb) return '${(bytes / gb).round()} GB';
+  return formatBytes(bytes);
 }
 
 String formatDate(DateTime date, {DateTime? now}) {

@@ -12,9 +12,9 @@ import '../widgets/sort_menu.dart';
 
 enum SizeFilter {
   any('Any size', 0, null),
-  small('< 1 MB', 0, 1024 * 1024),
-  medium('1 – 100 MB', 1024 * 1024, 100 * 1024 * 1024),
-  large('> 100 MB', 100 * 1024 * 1024, null);
+  small('< 1 MB', 0, 1000 * 1000),
+  medium('1 – 100 MB', 1000 * 1000, 100 * 1000 * 1000),
+  large('> 100 MB', 100 * 1000 * 1000, null);
 
   const SizeFilter(this.label, this.min, this.max);
   final String label;

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/brand.dart';
+
 class SettingsController extends ChangeNotifier {
   SettingsController._(this._prefs);
 
@@ -32,7 +34,7 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  int get seedColor => _prefs?.getInt('seedColor') ?? 0xFF6750A4;
+  int get seedColor => _prefs?.getInt('seedColor') ?? Brand.ember.toARGB32();
   set seedColor(int value) {
     _prefs?.setInt('seedColor', value);
     notifyListeners();

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/file_entry.dart';
 import '../../state/app_scope.dart';
 import '../widgets/file_actions.dart';
+import '../widgets/file_tile.dart';
 
 /// Read-only viewer for text, code, JSON, CSV, Markdown, logs...
 class TextViewerScreen extends StatefulWidget {
@@ -17,8 +18,11 @@ class TextViewerScreen extends StatefulWidget {
 }
 
 class _TextViewerScreenState extends State<TextViewerScreen> {
-  static const _maxBytes = 2 * 1024 * 1024;
-  Future<(String, bool)>? _text;
+  static const _maxBytes = 1024 * 1024;
+
+  /// Lines per rendered block: big files are laid out lazily, block by block.
+  static const _linesPerBlock = 80;
+  Future<(List<String>, int, bool)>? _text;
   double _fontSize = 14;
   bool _wrap = true;
 
@@ -28,17 +32,24 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
     _text ??= _load();
   }
 
-  Future<(String, bool)> _load() async {
-    final bytes = await AppScope.of(context).backend.readBytes(widget.entry.path);
-    final truncated = bytes.length > _maxBytes;
-    final slice = truncated ? bytes.sublist(0, _maxBytes) : bytes;
-    var text = utf8.decode(slice, allowMalformed: true);
-    if (widget.entry.extension == 'json') {
+  /// Returns the text split into blocks, the longest line length and whether
+  /// the file was cut off.
+  Future<(List<String>, int, bool)> _load() async {
+    final bytes = await AppScope.of(context).backend.readHead(widget.entry.path, _maxBytes);
+    final truncated = widget.entry.size > bytes.length;
+    var text = utf8.decode(bytes, allowMalformed: true);
+    if (widget.entry.extension == 'json' && !truncated) {
       try {
         text = const JsonEncoder.withIndent('  ').convert(jsonDecode(text));
       } catch (_) {}
     }
-    return (text, truncated);
+    final lines = const LineSplitter().convert(text);
+    final longest = lines.fold<int>(0, (m, l) => l.length > m ? l.length : m);
+    final blocks = [
+      for (var i = 0; i < lines.length; i += _linesPerBlock)
+        lines.sublist(i, (i + _linesPerBlock).clamp(0, lines.length)).join('\n'),
+    ];
+    return (blocks, longest, truncated);
   }
 
   @override
@@ -70,21 +81,32 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<(String, bool)>(
+      body: FutureBuilder<(List<String>, int, bool)>(
         future: _text,
         builder: (context, snap) {
-          if (snap.hasError) return Center(child: Text('Could not read file: ${snap.error}'));
+          if (snap.hasError) {
+            return EmptyState(
+              icon: Icons.error_outline_rounded,
+              title: 'Cannot read this file',
+              action: OutlinedButton(
+                onPressed: () => openExternally(context, widget.entry),
+                child: const Text('Open with another app'),
+              ),
+            );
+          }
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final (text, truncated) = snap.data!;
-          final body = SelectableText(
-            text.isEmpty ? '(empty file)' : text,
-            style: TextStyle(fontFamily: 'monospace', fontSize: _fontSize, height: 1.45, color: scheme.onSurface),
-          );
+          final (blocks, longest, truncated) = snap.data!;
+          final style = TextStyle(fontFamily: 'monospace', fontSize: _fontSize, height: 1.45, color: scheme.onSurface);
+          if (blocks.isEmpty) {
+            return Center(
+              child: Text('(empty file)', style: TextStyle(color: scheme.onSurfaceVariant)),
+            );
+          }
           return Column(
             children: [
               if (truncated)
                 MaterialBanner(
-                  content: const Text('Large file: showing the first 2 MB.'),
+                  content: const Text('Large file: showing the first 1 MB.'),
                   actions: [
                     TextButton(
                       onPressed: () => openExternally(context, widget.entry),
@@ -93,13 +115,27 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
                   ],
                 ),
               Expanded(
-                child: Scrollbar(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: _wrap
-                        ? SizedBox(width: double.infinity, child: body)
-                        : SingleChildScrollView(scrollDirection: Axis.horizontal, child: body),
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    Widget list(double width) => SizedBox(
+                      width: width,
+                      height: c.maxHeight,
+                      child: Scrollbar(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: blocks.length,
+                          itemBuilder: (context, i) => Text(blocks[i], style: style, softWrap: _wrap),
+                        ),
+                      ),
+                    );
+                    // Monospace glyphs are about 0.62em wide; very long lines are clipped.
+                    final contentWidth = (longest.clamp(0, 4000) * _fontSize * 0.62) + 32;
+                    return SelectionArea(
+                      child: _wrap || contentWidth <= c.maxWidth
+                          ? list(c.maxWidth)
+                          : SingleChildScrollView(scrollDirection: Axis.horizontal, child: list(contentWidth)),
+                    );
+                  },
                 ),
               ),
             ],

@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>File Manager</string>
+	<string>Burrow</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -71,8 +71,8 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Import photos and videos into File Manager.</string>
+	<string>Import photos and videos into Burrow.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Capture photos to import into File Manager.</string>
+	<string>Capture photos to import into Burrow.</string>
 </dict>
 </plist>

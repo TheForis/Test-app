@@ -1,16 +1,17 @@
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/file_entry.dart';
 import 'archive_utils.dart';
+import 'index_cache.dart';
 import 'memory_backend.dart' show FileSystemError;
 import 'storage_backend.dart';
 
@@ -84,6 +85,20 @@ class IoStorageBackend implements StorageBackend {
     return _root!;
   }
 
+  static const _storageChannel = MethodChannel('burrow/storage');
+
+  @override
+  Future<StorageSpace?> space() async {
+    try {
+      final result = await _storageChannel.invokeMapMethod<String, int>('space', {'path': await rootPath()});
+      final total = result?['total'], free = result?['free'];
+      if (total == null || free == null || total <= 0) return null;
+      return StorageSpace(total: total, free: free);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Future<List<StorageLocation>> locations() async {
     final root = await rootPath();
@@ -126,7 +141,7 @@ class IoStorageBackend implements StorageBackend {
       await for (final entity in dir.list(followLinks: false)) {
         final name = p.basename(entity.path);
         if (!showHidden && name.startsWith('.')) continue;
-        final entry = await _toEntry(entity);
+        final entry = await _toEntry(entity, showHidden: showHidden);
         if (entry != null) result.add(entry);
       }
     } on FileSystemException catch (e) {
@@ -135,7 +150,9 @@ class IoStorageBackend implements StorageBackend {
     return result;
   }
 
-  static Future<FileEntry?> _toEntry(FileSystemEntity entity) async {
+  /// For folders, `size` is the number of children, counting hidden ones only
+  /// when [showHidden] is set so it matches what opening the folder shows.
+  static Future<FileEntry?> _toEntry(FileSystemEntity entity, {bool showHidden = true}) async {
     try {
       final stat = await entity.stat();
       final isDir = stat.type == FileSystemEntityType.directory;
@@ -143,7 +160,10 @@ class IoStorageBackend implements StorageBackend {
       if (isDir) {
         size = 0;
         try {
-          size = await Directory(entity.path).list().length;
+          size = await Directory(entity.path)
+              .list(followLinks: false)
+              .where((c) => showHidden || !p.basename(c.path).startsWith('.'))
+              .length;
         } catch (_) {}
       }
       return FileEntry(
@@ -159,10 +179,23 @@ class IoStorageBackend implements StorageBackend {
   }
 
   @override
-  Future<List<FileEntry>> scanAll({bool showHidden = false}) async {
+  Future<List<FileEntry>> scanAll({bool showHidden = false, bool full = false}) async {
     final roots = [await rootPath(), ..._extraRoots];
-    return Isolate.run(() => _scan(roots, showHidden));
+    final sdRoots = _extraRoots;
+    final cache = await _indexCachePath();
+    return Isolate.run(
+      () => IndexScan(roots: roots, sdRoots: sdRoots, cachePath: cache, showHidden: showHidden, full: full).run(),
+    );
   }
+
+  @override
+  Future<(List<FileEntry>, DateTime)?> cachedIndex({bool showHidden = false}) async {
+    final cache = await _indexCachePath();
+    return Isolate.run(() => IndexScan.readSnapshot(cache, showHidden: showHidden));
+  }
+
+  /// In the app's private storage: not visible to the user or other apps.
+  Future<String> _indexCachePath() async => p.join((await getApplicationSupportDirectory()).path, 'index-v1.json');
 
   @override
   Future<FileEntry?> stat(String path) async {
@@ -173,6 +206,48 @@ class IoStorageBackend implements StorageBackend {
 
   @override
   Future<Uint8List> readBytes(String path) => File(path).readAsBytes();
+
+  @override
+  Future<Uint8List> readHead(String path, int maxBytes) async {
+    final file = await File(path).open();
+    try {
+      return await file.read(maxBytes);
+    } finally {
+      await file.close();
+    }
+  }
+
+  /// Compressed tarballs must be fully decompressed in memory to be listed.
+  static const _maxInMemoryPreview = 64 * 1024 * 1024;
+
+  @override
+  Future<List<ArchiveListing>> listArchiveEntries(FileEntry archive) {
+    final path = archive.path;
+    final name = archive.name.toLowerCase();
+    final size = archive.size;
+    // Everything happens in the isolate so large archives never cross into
+    // (or get copied by) the UI isolate.
+    return Isolate.run(() {
+      if (name.endsWith('.zip') || name.endsWith('.jar') || name.endsWith('.apk')) {
+        final input = InputFileStream(path);
+        try {
+          return listArchive(ZipDecoder().decodeStream(input));
+        } finally {
+          input.closeSync();
+        }
+      }
+      if (name.endsWith('.tar')) {
+        final input = InputFileStream(path);
+        try {
+          return listArchive(TarDecoder().decodeStream(input));
+        } finally {
+          input.closeSync();
+        }
+      }
+      if (size > _maxInMemoryPreview) throw const ArchiveTooLargeError();
+      return listArchive(decodeArchiveBytes(p.basename(path), File(path).readAsBytesSync()));
+    });
+  }
 
   @override
   Future<void> writeBytes(String path, Uint8List bytes) async {
@@ -203,12 +278,22 @@ class IoStorageBackend implements StorageBackend {
   @override
   Future<FileEntry> rename(FileEntry entry, String newName) async {
     final target = p.join(p.dirname(entry.path), newName);
-    if (await FileSystemEntity.type(target) != FileSystemEntityType.notFound) {
+    // Android shared storage ignores case, so "a.jpg" -> "A.jpg" finds itself.
+    final caseOnly = p.normalize(target).toLowerCase() == p.normalize(entry.path).toLowerCase();
+    if (!caseOnly && await FileSystemEntity.type(target) != FileSystemEntityType.notFound) {
       throw FileSystemError('"$newName" already exists');
     }
     final entity = entry.isDirectory ? Directory(entry.path) : File(entry.path);
-    final renamed = await entity.rename(target);
-    return (await _toEntry(renamed))!;
+    try {
+      if (caseOnly) {
+        // Some file systems treat a case-only rename as a no-op; go via a temporary name.
+        final temp = await entity.rename('$target.burrow-rename');
+        return (await _toEntry(await temp.rename(target)))!;
+      }
+      return (await _toEntry(await entity.rename(target)))!;
+    } on FileSystemException catch (e) {
+      throw FileSystemError('Could not rename ${entry.name}: ${e.osError?.message ?? e.message}');
+    }
   }
 
   Future<String> _uniquePath(String dir, String name) async {
@@ -317,41 +402,4 @@ class IoStorageBackend implements StorageBackend {
   String parentOf(String path) => p.dirname(path);
   @override
   String nameOf(String path) => p.basename(path);
-}
-
-const _maxIndexedFiles = 150000;
-
-/// Breadth-first walk that survives unreadable folders. Runs in an isolate.
-List<FileEntry> _scan(List<String> roots, bool showHidden) {
-  final result = <FileEntry>[];
-  final queue = <String>[...roots];
-  while (queue.isNotEmpty && result.length < _maxIndexedFiles) {
-    final dir = queue.removeLast();
-    final name = p.basename(dir);
-    // Android/data and Android/obb are private to other apps.
-    if (name == 'data' || name == 'obb') {
-      if (p.basename(p.dirname(dir)) == 'Android') continue;
-    }
-    List<FileSystemEntity> children;
-    try {
-      children = Directory(dir).listSync(followLinks: false);
-    } catch (_) {
-      continue;
-    }
-    for (final child in children) {
-      final childName = p.basename(child.path);
-      if (!showHidden && childName.startsWith('.')) continue;
-      if (child is Directory) {
-        queue.add(child.path);
-      } else if (child is File) {
-        try {
-          final stat = child.statSync();
-          result.add(
-            FileEntry(path: child.path, name: childName, isDirectory: false, size: stat.size, modified: stat.modified),
-          );
-        } catch (_) {}
-      }
-    }
-  }
-  return result;
 }

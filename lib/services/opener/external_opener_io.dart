@@ -33,7 +33,7 @@ Future<OpenResultInfo> installApk(String path) async {
   if (!status.isGranted) {
     return const OpenResultInfo(
       OpenOutcome.permissionDenied,
-      'Allow "Install unknown apps" for File Manager to install APKs',
+      'Allow "Install unknown apps" for Burrow to install APKs',
     );
   }
   try {

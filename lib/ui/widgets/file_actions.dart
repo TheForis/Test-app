@@ -1,3 +1,5 @@
+import 'dart:io' show FileSystemException;
+
 import 'package:flutter/material.dart';
 
 import '../../core/file_category.dart';
@@ -5,12 +7,15 @@ import '../../core/file_entry.dart';
 import '../../core/format.dart';
 import '../../core/sorting.dart';
 import '../../services/opener/external_opener.dart';
+import '../../services/storage/storage_backend.dart';
 import '../../state/app_scope.dart';
 import '../shell.dart';
 import '../viewers/archive_viewer_screen.dart';
+import '../viewers/audio_player_screen.dart';
 import '../viewers/image_viewer_screen.dart';
 import '../viewers/pdf_viewer_screen.dart';
 import '../viewers/text_viewer_screen.dart';
+import '../viewers/video_player_screen.dart';
 import 'file_thumb.dart';
 
 void showMessage(BuildContext context, String message, {SnackBarAction? action}) {
@@ -36,6 +41,17 @@ Future<void> openEntry(BuildContext context, FileEntry entry, {List<FileEntry>? 
     navigator.push(
       MaterialPageRoute(
         builder: (_) => ImageViewerScreen(images: index < 0 ? [entry] : images, initialIndex: index < 0 ? 0 : index),
+      ),
+    );
+  } else if (entry.isPlayableVideo) {
+    navigator.push(MaterialPageRoute(builder: (_) => VideoPlayerScreen(entry: entry)));
+  } else if (entry.isPlayableAudio) {
+    // The other tracks in the list become the playlist.
+    final tracks = (siblings ?? [entry]).where((e) => e.isPlayableAudio).toList();
+    final index = tracks.indexOf(entry);
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => AudioPlayerScreen(tracks: index < 0 ? [entry] : tracks, initialIndex: index < 0 ? 0 : index),
       ),
     );
   } else if (entry.isText) {
@@ -95,9 +111,23 @@ Future<T?> runFileOp<T>(BuildContext context, Future<T> Function() op, {String? 
     await scope.filesChanged();
     return result;
   } catch (e) {
-    if (context.mounted) showMessage(context, '$e');
+    if (context.mounted) showMessage(context, friendlyError(e));
     return null;
   }
+}
+
+/// Turns low-level exceptions into a sentence a user can act on.
+String friendlyError(Object error) {
+  if (error is FileSystemException) {
+    final os = error.osError?.message.toLowerCase() ?? '';
+    if (os.contains('no space')) return 'Not enough storage space';
+    if (os.contains('permission') || os.contains('not permitted')) {
+      return "Burrow isn't allowed to change this location";
+    }
+    if (os.contains('read-only')) return 'This storage is read-only';
+    return 'Something went wrong: ${error.osError?.message ?? error.message}';
+  }
+  return '$error';
 }
 
 Future<void> extractEntry(BuildContext context, FileEntry entry) async {
@@ -136,6 +166,9 @@ Future<String?> promptText(
     if (t.isEmpty) return 'Enter a name';
     if (t.contains('/') || t.contains('\\')) return 'Names cannot contain / or \\';
     if (t == '.' || t == '..') return 'Invalid name';
+    // SD cards (FAT/exFAT) reject these characters.
+    if (RegExp('[<>:"|?*\x00-\x1F]').hasMatch(t)) return 'Names cannot contain < > : " | ? *';
+    if (t.length > 255) return 'Name is too long';
     return null;
   }
 
@@ -400,7 +433,7 @@ class _FolderPickerDialog extends StatefulWidget {
 }
 
 class _FolderPickerDialogState extends State<_FolderPickerDialog> {
-  String? _root;
+  List<StorageLocation> _roots = const [];
   String? _path;
   List<FileEntry>? _folders;
   String? _error;
@@ -409,9 +442,12 @@ class _FolderPickerDialogState extends State<_FolderPickerDialog> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_path == null) {
-      AppScope.of(context).backend.rootPath().then((root) {
-        _root = root;
-        _load(root);
+      final backend = AppScope.of(context).backend;
+      backend.locations().then((locations) async {
+        final roots = locations.where((l) => l.isRoot).toList();
+        if (!mounted) return;
+        setState(() => _roots = roots);
+        _load(roots.isNotEmpty ? roots.first.path : await backend.rootPath());
       });
     }
   }
@@ -435,15 +471,35 @@ class _FolderPickerDialogState extends State<_FolderPickerDialog> {
   @override
   Widget build(BuildContext context) {
     final backend = AppScope.of(context).backend;
-    final atRoot = _path == null || _path == _root;
+    final atRoot = _path == null || _roots.any((r) => r.path == _path);
+    // Fits phones held sideways, where there is little vertical room.
+    final height = (MediaQuery.sizeOf(context).height * 0.5).clamp(200.0, 420.0);
     return AlertDialog(
       title: Text(widget.title),
       contentPadding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
       content: SizedBox(
         width: 420,
-        height: 420,
+        height: height,
         child: Column(
           children: [
+            if (_roots.length > 1)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final r in _roots)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8, bottom: 4),
+                        child: ChoiceChip(
+                          avatar: Icon(r.icon, size: 18),
+                          label: Text(r.name),
+                          selected: _path != null && (_path == r.path || _path!.startsWith('${r.path}/')),
+                          onSelected: (_) => _load(r.path),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ListTile(
               leading: IconButton(
                 icon: const Icon(Icons.arrow_upward_rounded),

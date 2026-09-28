@@ -3,17 +3,21 @@ import 'package:flutter/material.dart';
 import '../../core/format.dart';
 import '../../state/app_scope.dart';
 import '../theme.dart';
+import '../widgets/brand_logo.dart';
+import '../widgets/scan_feedback.dart';
+import '../../core/brand.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  static const _colors = [0xFF6750A4, 0xFF0061A4, 0xFF006E1C, 0xFFB3261E, 0xFF8B5000, 0xFF006A6A];
+  // Ember (the Burrow default) first, then alternatives.
+  static const _colors = [0xFFF2542D, 0xFF6750A4, 0xFF0061A4, 0xFF006E1C, 0xFFB3261E, 0xFF006A6A];
 
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
     final settings = scope.settings;
-    final scheme = Theme.of(context).colorScheme;
+    final narrow = MediaQuery.sizeOf(context).width < 400;
     return ListenableBuilder(
       listenable: Listenable.merge([settings, scope.index]),
       builder: (context, _) => Scaffold(
@@ -35,21 +39,23 @@ class SettingsScreen extends StatelessWidget {
                       SizedBox(
                         width: double.infinity,
                         child: SegmentedButton<ThemeMode>(
-                          segments: const [
+                          // Icons plus check marks squeeze "System" onto two lines on small phones.
+                          showSelectedIcon: false,
+                          segments: [
                             ButtonSegment(
                               value: ThemeMode.system,
-                              icon: Icon(Icons.brightness_auto_rounded),
-                              label: Text('System'),
+                              icon: narrow ? null : const Icon(Icons.brightness_auto_rounded),
+                              label: const Text('System'),
                             ),
                             ButtonSegment(
                               value: ThemeMode.light,
-                              icon: Icon(Icons.light_mode_rounded),
-                              label: Text('Light'),
+                              icon: narrow ? null : const Icon(Icons.light_mode_rounded),
+                              label: const Text('Light'),
                             ),
                             ButtonSegment(
                               value: ThemeMode.dark,
-                              icon: Icon(Icons.dark_mode_rounded),
-                              label: Text('Dark'),
+                              icon: narrow ? null : const Icon(Icons.dark_mode_rounded),
+                              label: const Text('Dark'),
                             ),
                           ],
                           selected: {settings.themeMode},
@@ -109,15 +115,18 @@ class SettingsScreen extends StatelessWidget {
                     ListTile(
                       leading: const Icon(Icons.refresh_rounded),
                       title: const Text('Rescan storage'),
+                      isThreeLine: scope.index.lastReport != null,
                       subtitle: Text(
                         scope.index.lastScan == null
                             ? 'Not scanned yet'
-                            : '${scope.index.files.length} files • ${formatBytes(scope.index.totalBytes)} • ${formatDate(scope.index.lastScan!)}',
+                            : '${formatCount(scope.index.files.length)} files • ${formatBytes(scope.index.totalBytes)} • '
+                                  '${formatDate(scope.index.lastScan!)}'
+                                  '${scope.index.lastReport == null ? '' : '\n${describeScan(scope.index.lastReport!)}'}',
                       ),
                       trailing: scope.index.loading
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4))
                           : null,
-                      onTap: scope.index.loading ? null : () => scope.index.refresh(showHidden: settings.showHidden),
+                      onTap: scope.index.loading ? null : () => refreshWithReport(context, full: true),
                     ),
                     if (scope.backend.isDeviceStorage)
                       ListTile(
@@ -132,10 +141,11 @@ class SettingsScreen extends StatelessWidget {
               _section(context, 'About'),
               Card(
                 child: ListTile(
-                  leading: Icon(Icons.info_outline_rounded, color: scheme.primary),
-                  title: const Text('File Manager'),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: const BrandLogo(size: 48),
+                  title: const Text(Brand.name, style: TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: Text(
-                    scope.backend.isDeviceStorage ? 'Browse, search, open, unzip and install files.' : 'Web edition: your browser keeps device folders private, so files you import live in this tab.',
+                    scope.backend.isDeviceStorage ? '${Brand.tagline} Browse, search, open, unzip and install files.' : 'Web edition: your browser keeps device folders private, so files you import live in this tab.',
                   ),
                 ),
               ),

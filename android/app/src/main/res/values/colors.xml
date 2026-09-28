@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Keep in sync with lib/core/brand.dart -->
+    <color name="brand_ink">#15121F</color>
+    <color name="brand_ink_light">#2B2544</color>
+    <color name="brand_ember">#F2542D</color>
+</resources>

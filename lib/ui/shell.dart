@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../state/app_scope.dart';
 import 'browser/browser_screen.dart';
 import 'home/home_screen.dart';
 import 'search/search_screen.dart';
 import 'settings/settings_screen.dart';
 import 'theme.dart';
+import 'widgets/brand_logo.dart';
 
 /// Lets any screen switch tabs or open a folder in the Browse tab.
 class ShellController extends ChangeNotifier {
@@ -50,7 +50,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
+class _AppShellState extends State<AppShell> {
   late final ShellController _controller = ShellScope.of(context);
 
   static const _destinations = [
@@ -61,12 +61,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   ];
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _controller.removeListener(_onTab);
@@ -75,21 +69,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_onTab);
     super.dispose();
   }
 
   void _onTab() => setState(() {});
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // The user may have granted "All files access" in system settings.
-    if (state == AppLifecycleState.resumed) {
-      final scope = AppScope.of(context);
-      scope.index.recheckAccess(showHidden: scope.settings.showHidden);
-    }
-  }
 
   void _handleBack() {
     if (_controller.tab == 1 && (_controller.browserBack?.call() ?? false)) return;
@@ -101,7 +85,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final width = MediaQuery.sizeOf(context).width;
     final useRail = width >= Breakpoints.compact;
     final extendedRail = width >= Breakpoints.expanded + 200;
-    final scheme = Theme.of(context).colorScheme;
 
     final body = IndexedStack(
       index: _controller.tab,
@@ -125,19 +108,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     labelType: extendedRail ? NavigationRailLabelType.none : NavigationRailLabelType.all,
                     leading: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: extendedRail
-                          ? Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _Logo(color: scheme.primary),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'File Manager',
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              ],
-                            )
-                          : _Logo(color: scheme.primary),
+                      child: extendedRail ? const BrandWordmark(logoSize: 44) : const BrandLogo(),
                     ),
                     destinations: [
                       for (final d in _destinations)
@@ -165,20 +136,4 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       ),
     );
   }
-}
-
-class _Logo extends StatelessWidget {
-  const _Logo({required this.color});
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 44,
-    height: 44,
-    decoration: BoxDecoration(
-      gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.6)]),
-      borderRadius: BorderRadius.circular(14),
-    ),
-    child: const Icon(Icons.folder_copy_rounded, color: Colors.white),
-  );
 }

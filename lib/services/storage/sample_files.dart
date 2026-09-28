@@ -4,7 +4,7 @@ import 'dart:typed_data';
 /// Demo content for the web build, so a first-time visitor sees how every
 /// viewer works before importing their own files.
 
-const welcomeText = '''Welcome to File Manager!
+const welcomeText = '''Welcome to Burrow!
 
 On the web the browser keeps your device's folders private, so this
 workspace lives in memory. Use the "Import" button to bring files in,
@@ -22,12 +22,12 @@ const sampleMarkdown = '''# Notes
 ''';
 
 const sampleJson =
-    '{\n  "app": "File Manager",\n  "platforms": ["android", "ios", "web"],\n  "features": ["search", "sort", "filter", "unzip", "pdf", "apk"]\n}\n';
+    '{\n  "app": "Burrow",\n  "platforms": ["android", "ios", "web"],\n  "features": ["search", "sort", "filter", "unzip", "pdf", "apk"]\n}\n';
 
 /// Builds a small, valid single-page PDF with a correct cross-reference table.
 Uint8List buildSamplePdf() {
   const content =
-      'BT /F1 28 Tf 72 740 Td (File Manager) Tj ET\n'
+      'BT /F1 28 Tf 72 740 Td (Burrow) Tj ET\n'
       'BT /F1 14 Tf 72 700 Td (This PDF is rendered by the built-in viewer.) Tj ET\n'
       'BT /F1 14 Tf 72 676 Td (Pinch or scroll to zoom. Works on Android, iOS and web.) Tj ET\n';
   final objects = [

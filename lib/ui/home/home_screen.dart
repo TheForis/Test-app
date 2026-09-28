@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../../core/brand.dart';
 import '../../core/file_category.dart';
 import '../../core/file_entry.dart';
 import '../../core/format.dart';
 import '../../core/sorting.dart';
 import '../../services/storage/storage_backend.dart';
 import '../../state/app_scope.dart';
+import '../../state/file_index.dart';
+import '../../state/storage_breakdown.dart';
+import '../burrow/burrow_screen.dart';
 import '../category/category_screen.dart';
 import '../shell.dart';
 import '../theme.dart';
+import '../widgets/brand_logo.dart';
 import '../widgets/file_actions.dart';
 import '../widgets/file_thumb.dart';
 import '../widgets/file_tile.dart';
+import '../widgets/scan_feedback.dart';
+import '../widgets/storage_tube.dart';
 
 enum RecentOrder {
   newest('Newest'),
@@ -33,8 +40,6 @@ class _HomeScreenState extends State<HomeScreen> {
   RecentOrder _order = RecentOrder.newest;
   Set<FileCategory> _recentFilter = {};
   int _recentLimit = 20;
-  List<StorageLocation> _locations = const [];
-  bool _locationsLoaded = false;
 
   static const _homeCategories = [
     FileCategory.image,
@@ -45,26 +50,10 @@ class _HomeScreenState extends State<HomeScreen> {
     FileCategory.archive,
   ];
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_locationsLoaded) _loadLocations();
-  }
-
-  Future<void> _loadLocations() async {
-    final scope = AppScope.of(context);
-    if (!scope.index.hasAccess) return;
-    _locationsLoaded = true;
-    try {
-      final locations = await scope.backend.locations();
-      if (mounted) setState(() => _locations = locations);
-    } catch (_) {}
-  }
-
   Future<void> _refresh() async {
-    final scope = AppScope.of(context);
-    await _loadLocations();
-    await scope.index.refresh(showHidden: scope.settings.showHidden);
+    // Locations are loaded at startup; re-read them in case an SD card appeared.
+    await AppScope.of(context).index.reloadLocations();
+    if (mounted) await refreshWithReport(context);
   }
 
   List<FileEntry> _recentFiles(List<FileEntry> files) {
@@ -96,7 +85,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListenableBuilder(
       listenable: index,
       builder: (context, _) {
-        if (index.hasAccess && !_locationsLoaded) _loadLocations();
         final width = MediaQuery.sizeOf(context).width;
         final pad = pagePadding(context);
         final recent = _recentFiles(index.files);
@@ -108,8 +96,16 @@ class _HomeScreenState extends State<HomeScreen> {
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                SliverAppBar.large(
-                  title: const Text('Files', style: TextStyle(fontWeight: FontWeight.w800)),
+                SliverAppBar(
+                  pinned: true,
+                  toolbarHeight: 72,
+                  // The navigation rail already shows the logo on wider screens.
+                  title: width < Breakpoints.compact
+                      ? const BrandWordmark(logoSize: 36)
+                      : Text(
+                          'Home',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                        ),
                   actions: [
                     if (scope.backend.supportsImport)
                       IconButton(
@@ -142,10 +138,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   )
                 else ...[
+                  SliverToBoxAdapter(
+                    child: ContentWidth(
+                      child: Padding(padding: pad.copyWith(top: 20), child: const _BurrowHero()),
+                    ),
+                  ),
                   _sectionHeader(context, 'Storage'),
                   SliverToBoxAdapter(
                     child: ContentWidth(
-                      child: _StorageStrip(locations: _locations, padding: pad),
+                      child: _StorageStrip(locations: index.locations, padding: pad),
                     ),
                   ),
                   _sectionHeader(context, 'Categories'),
@@ -349,6 +350,199 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 }
 
+/// Signature card: device capacity as a glass tube filled with a band per
+/// kind of file. Tap it to explore the burrow.
+class _BurrowHero extends StatelessWidget {
+  const _BurrowHero();
+
+  // AppScope.of doesn't subscribe to changes, and this widget is const, so it
+  // must listen to the index itself or it keeps showing its first state.
+  @override
+  Widget build(BuildContext context) {
+    final index = AppScope.of(context).index;
+    return ListenableBuilder(listenable: index, builder: (context, _) => _build(context, index));
+  }
+
+  Widget _build(BuildContext context, FileIndex index) {
+    final text = Theme.of(context).textTheme;
+    final scanning = index.loading && !index.loadedOnce;
+    final b = StorageBreakdown.of(index);
+    final segments = [for (final p in b.parts) TubeSegment(label: p.label, bytes: p.bytes, color: p.color)];
+    final white70 = Colors.white.withValues(alpha: 0.7);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Brand.inkLight, Brand.ink],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [BoxShadow(color: Brand.ink.withValues(alpha: 0.25), blurRadius: 24, offset: const Offset(0, 10))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // Oversized mark as a watermark.
+          const Positioned(
+            right: -36,
+            top: -28,
+            child: CustomPaint(
+              size: Size.square(180),
+              painter: BurrowMarkPainter(background: false, monochrome: Color(0x14FFFFFF)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Your burrow',
+                      style: text.titleSmall?.copyWith(color: Brand.glow, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 12),
+                    // The saved index is already on screen; this is the quiet background check.
+                    if (index.loading && index.loadedOnce)
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: CheckingIndicator(color: Colors.white.withValues(alpha: 0.75)),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: scanning ? 'Digging…' : formatBytes(b.used)),
+                      if (!scanning && b.free != null)
+                        TextSpan(
+                          text: '  of ${formatCapacity(b.capacity)}',
+                          style: text.titleMedium?.copyWith(color: white70, fontWeight: FontWeight.w600),
+                        ),
+                    ],
+                  ),
+                  style: text.displaySmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1,
+                  ),
+                ),
+                Text(
+                  scanning
+                      ? 'Indexing your files'
+                      : [
+                          if (b.free != null) '${formatBytes(b.free!)} free',
+                          '${formatCount(index.files.length)} file${index.files.length == 1 ? '' : 's'} indexed',
+                        ].join(' · '),
+                  style: text.bodyMedium?.copyWith(color: white70),
+                ),
+                const SizedBox(height: 18),
+                if (scanning || b.capacity == 0)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: LinearProgressIndicator(
+                      minHeight: 30,
+                      value: scanning ? null : 0,
+                      color: Brand.ember,
+                      backgroundColor: Colors.white.withValues(alpha: 0.1),
+                    ),
+                  )
+                else
+                  StorageTube(segments: segments, capacity: b.capacity),
+                if (!scanning && b.parts.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
+                    builder: (context, c) {
+                      final columns = c.maxWidth >= 720 ? 5 : (c.maxWidth >= 440 ? 4 : 3);
+                      final width = (c.maxWidth - 12 * (columns - 1)) / columns;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          for (final p in b.parts) _legend(context, width, p.color, p.label, p.bytes),
+                          if (b.free != null) _legend(context, width, null, 'Free', b.free!),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Text(
+                        'Explore your burrow',
+                        style: text.labelLarge?.copyWith(color: Brand.glow, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward_rounded, size: 18, color: Brand.glow),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Positioned.fill(
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: scanning
+                    ? null
+                    : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BurrowScreen())),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Name over size, so nothing is cut off on narrow phones.
+  Widget _legend(BuildContext context, double width, Color? color, String label, int bytes) {
+    final text = Theme.of(context).textTheme;
+    return SizedBox(
+      width: width,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: color == null ? Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5) : null,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelMedium?.copyWith(color: Colors.white.withValues(alpha: 0.75)),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 15),
+            child: Text(
+              formatBytes(bytes),
+              style: text.labelLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SearchLauncher extends StatelessWidget {
   const _SearchLauncher({required this.onTap});
   final VoidCallback onTap;
@@ -532,7 +726,10 @@ class _PermissionCard extends StatelessWidget {
   const _PermissionCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: AppScope.of(context).index, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final scope = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
     final permanently = scope.index.access == AccessState.permanentlyDenied;
@@ -552,7 +749,7 @@ class _PermissionCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'File Manager needs "All files access" to browse, search, open, unzip and install files on your device.',
+              '${Brand.name} needs "All files access" to browse, search, open, unzip and install files on your device.',
               style: TextStyle(color: scheme.onPrimaryContainer),
             ),
             const SizedBox(height: 16),

@@ -39,6 +39,24 @@ Archive decodeArchiveBytes(String fileName, Uint8List bytes) {
   throw const FormatException('Unsupported archive format');
 }
 
+/// One entry inside an archive, shown in the archive preview.
+class ArchiveListing {
+  const ArchiveListing(this.name, this.size, this.isFile);
+  final String name;
+  final int size;
+  final bool isFile;
+}
+
+/// Thrown when an archive is too large to decode for a preview (it can still
+/// be extracted, which streams from disk).
+class ArchiveTooLargeError implements Exception {
+  const ArchiveTooLargeError();
+}
+
+List<ArchiveListing> listArchive(Archive archive) => [
+  for (final f in archive) ArchiveListing(f.name, f.size, f.isFile),
+];
+
 /// Normalises an archive entry name and rejects entries that would escape the
 /// extraction folder ("zip slip").
 String? safeArchivePath(String name) {

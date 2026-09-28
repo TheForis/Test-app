@@ -67,6 +67,14 @@ class FileEntry {
   static const _viewableImages = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico'};
   bool get isViewableImage => _viewableImages.contains(extension);
 
+  /// Formats the built-in players handle on Android, iOS and modern browsers.
+  /// Others (AVI, WMV, FLV...) open in another app. A file that still can't
+  /// be decoded on a given device shows "Open with another app".
+  static const _playableVideos = {'mp4', 'm4v', 'mov', 'webm', 'mkv', '3gp'};
+  static const _playableAudio = {'mp3', 'm4a', 'aac', 'wav', 'flac', 'ogg', 'oga', 'opus'};
+  bool get isPlayableVideo => _playableVideos.contains(extension);
+  bool get isPlayableAudio => _playableAudio.contains(extension);
+
   /// Archives we can list and extract ourselves.
   bool get isExtractable {
     final n = name.toLowerCase();

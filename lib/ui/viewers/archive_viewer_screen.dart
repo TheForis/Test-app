@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/file_category.dart';
@@ -8,18 +7,6 @@ import '../../services/storage/archive_utils.dart';
 import '../../state/app_scope.dart';
 import '../widgets/file_actions.dart';
 import '../widgets/file_tile.dart';
-
-class _ArchiveItem {
-  const _ArchiveItem(this.name, this.size, this.isFile);
-  final String name;
-  final int size;
-  final bool isFile;
-}
-
-List<_ArchiveItem> _listArchive((String, Uint8List) input) {
-  final archive = decodeArchiveBytes(input.$1, input.$2);
-  return [for (final f in archive) _ArchiveItem(f.name, f.size, f.isFile)];
-}
 
 /// Shows what is inside a zip / tar / gz archive and extracts it.
 class ArchiveViewerScreen extends StatefulWidget {
@@ -32,8 +19,8 @@ class ArchiveViewerScreen extends StatefulWidget {
 }
 
 class _ArchiveViewerScreenState extends State<ArchiveViewerScreen> {
-  static const _maxPreviewBytes = 200 * 1024 * 1024;
-  Future<List<_ArchiveItem>>? _items;
+  Future<List<ArchiveListing>>? _items;
+  bool _tooLarge = false;
   bool _extracting = false;
 
   @override
@@ -42,10 +29,13 @@ class _ArchiveViewerScreenState extends State<ArchiveViewerScreen> {
     _items ??= _load();
   }
 
-  Future<List<_ArchiveItem>> _load() async {
-    if (widget.entry.size > _maxPreviewBytes) return const [];
-    final bytes = await AppScope.of(context).backend.readBytes(widget.entry.path);
-    return compute(_listArchive, (widget.entry.name, bytes));
+  Future<List<ArchiveListing>> _load() async {
+    try {
+      return await AppScope.of(context).backend.listArchiveEntries(widget.entry);
+    } on ArchiveTooLargeError {
+      _tooLarge = true;
+      return const [];
+    }
   }
 
   Future<void> _extract() async {
@@ -75,14 +65,14 @@ class _ArchiveViewerScreenState extends State<ArchiveViewerScreen> {
             : const Icon(Icons.unarchive_rounded),
         label: Text(_extracting ? 'Extracting…' : 'Extract'),
       ),
-      body: FutureBuilder<List<_ArchiveItem>>(
+      body: FutureBuilder<List<ArchiveListing>>(
         future: _items,
         builder: (context, snap) {
           if (snap.hasError) {
             return EmptyState(
               icon: Icons.error_outline_rounded,
               title: 'Cannot read this archive',
-              message: '${snap.error}',
+              message: 'It may be damaged or use an unsupported format.',
               action: OutlinedButton(
                 onPressed: () => openExternally(context, widget.entry),
                 child: const Text('Open with another app'),
@@ -94,8 +84,8 @@ class _ArchiveViewerScreenState extends State<ArchiveViewerScreen> {
           if (items.isEmpty) {
             return EmptyState(
               icon: FileCategory.archive.icon,
-              title: widget.entry.size > _maxPreviewBytes ? 'Archive too large to preview' : 'Archive is empty',
-              message: widget.entry.size > _maxPreviewBytes ? 'You can still extract it.' : null,
+              title: _tooLarge ? 'Archive too large to preview' : 'Archive is empty',
+              message: _tooLarge ? 'You can still extract it.' : null,
             );
           }
           final files = items.where((i) => i.isFile).toList();

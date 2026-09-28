@@ -8,6 +8,7 @@ import '../theme.dart';
 import '../widgets/file_actions.dart';
 import '../widgets/file_thumb.dart';
 import '../widgets/file_tile.dart';
+import '../widgets/scan_feedback.dart';
 import '../widgets/sort_menu.dart';
 
 /// All files of one category (e.g. every PDF, every APK) across storage.
@@ -42,7 +43,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
         final pad = pagePadding(context);
         return Scaffold(
           body: RefreshIndicator(
-            onRefresh: () => scope.index.refresh(showHidden: scope.settings.showHidden),
+            onRefresh: () => refreshWithReport(context),
             edgeOffset: 160,
             child: CustomScrollView(
               slivers: [

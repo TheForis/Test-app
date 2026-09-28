@@ -101,6 +101,8 @@ class _ImageThumbState extends State<_ImageThumb> {
             height: widget.size,
             fit: BoxFit.cover,
             gaplessPlayback: true,
+            // Show the badge while decoding instead of an empty square.
+            frameBuilder: (_, child, frame, wasSync) => wasSync || frame != null ? child : widget.fallback,
             errorBuilder: (_, _, _) => widget.fallback,
           ),
         );

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Burrow Privacy Policy</title>
+  <meta name="description" content="Privacy policy for Burrow: File Manager.">
+  <style>
+    :root { --bg: #fffaf7; --fg: #1d1a24; --muted: #5d5868; --accent: #c63d1c; --card: #ffffff; --line: #eee4de; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #15121f; --fg: #f3effa; --muted: #b9b2cc; --accent: #ff8a4c; --card: #1c1829; --line: #332d4b; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 720px; margin: 0 auto; padding: 48px 16px 64px; }
+    h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 4px; letter-spacing: -0.02em; }
+    h2 { font-size: 1.15rem; margin: 36px 0 8px; }
+    p, li { color: var(--fg); }
+    .meta { color: var(--muted); margin: 0 0 28px; }
+    .summary { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; padding: 16px 20px; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.95rem; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; }
+    code { font-size: 0.9em; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Burrow Privacy Policy</h1>
+  <p class="meta">Burrow: File Manager, by BoriSoft · Effective 27 September 2026</p>
+
+  <div class="summary">
+    <strong>In short:</strong> Burrow does not collect, store, share or sell any personal data.
+    Your files stay on your device. The Android app does not even have permission to use the internet.
+  </div>
+
+  <h2>What Burrow does with your files</h2>
+  <p>Burrow reads, lists, opens, copies, moves, renames, deletes and extracts files on your device, and only when you ask it to.
+    It builds an index of file names, sizes and dates so it can show categories, recent files and search results.
+    That index is kept in the app's memory on your device and is never sent anywhere.</p>
+
+  <h2>Data we collect</h2>
+  <p>None. Burrow has no accounts, no analytics, no advertising, no crash reporting and no tracking.
+    We have no servers that receive information from the app.</p>
+  <p>Your settings (theme, accent color, grid view, hidden files) are saved on your device only, and are deleted when you uninstall the app.</p>
+
+  <h2>Permissions</h2>
+  <table>
+    <tr><th>Permission</th><th>Why Burrow needs it</th></tr>
+    <tr><td>All files access (<code>MANAGE_EXTERNAL_STORAGE</code>) and storage/media access</td>
+        <td>To browse, search, open and manage the files on your device's storage and SD cards. This is the core purpose of a file manager.</td></tr>
+    <tr><td>Install unknown apps (<code>REQUEST_INSTALL_PACKAGES</code>)</td>
+        <td>To hand an APK file that you tap to Android's system installer. Burrow never installs anything on its own.</td></tr>
+    <tr><td>Keep awake (<code>WAKE_LOCK</code>) and network state (<code>ACCESS_NETWORK_STATE</code>)</td>
+        <td>Used by the built-in audio and video player: to keep music playing with the screen off, and by Android's media player library. Burrow still has no internet permission and cannot send anything off your device.</td></tr>
+    <tr><td>Photos and camera (iOS)</td>
+        <td>Only to import photos or videos that you pick into Burrow's folder.</td></tr>
+  </table>
+  <p>You can revoke any permission at any time in your device settings.</p>
+
+  <h2>Opening files in other apps</h2>
+  <p>When you open a file that Burrow can't display itself, it is handed to another app you choose (for example a video player).
+    What that app does with the file is covered by that app's own privacy policy.</p>
+
+  <h2>Web version</h2>
+  <p>In the web version, files you import stay in your browser tab's memory and disappear when you close the tab. They are not uploaded.</p>
+
+  <h2>Children</h2>
+  <p>Burrow collects no data from anyone, including children.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the new version will be posted on this page with a new effective date.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about privacy: <a href="mailto:boriskrstovski@gmail.com">boriskrstovski@gmail.com</a></p>
+</main>
+</body>
+</html>

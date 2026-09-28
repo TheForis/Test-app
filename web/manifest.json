@@ -1,11 +1,11 @@
 {
-    "name": "File Manager",
-    "short_name": "Files",
+    "name": "Burrow",
+    "short_name": "Burrow",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#6750A4",
-    "theme_color": "#6750A4",
-    "description": "Browse, search, preview and unzip files.",
+    "background_color": "#15121F",
+    "theme_color": "#15121F",
+    "description": "Burrow: browse, search, preview and unzip your files.",
     "orientation": "any",
     "prefer_related_applications": false,
     "icons": [

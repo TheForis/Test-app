@@ -1,3 +1,4 @@
+import 'package:file_manager/services/storage/storage_backend.dart';
 import 'package:file_manager/core/file_category.dart';
 import 'package:file_manager/core/file_entry.dart';
 import 'package:file_manager/core/format.dart';
@@ -50,7 +51,16 @@ void main() {
 
   test('formatBytes', () {
     expect(formatBytes(512), '512 B');
-    expect(formatBytes(1536), '1.5 KB');
-    expect(formatBytes(5 * 1024 * 1024), '5.0 MB');
+    expect(formatBytes(1500), '1.5 KB');
+    expect(formatBytes(5 * 1000 * 1000), '5.0 MB');
+    expect(formatBytes(47200000000), '47.2 GB');
+    expect(formatCapacity(128000000000), '128 GB');
+  });
+
+  test('advertised capacity rounds up to the marketed size', () {
+    const gb = 1000 * 1000 * 1000;
+    expect(const StorageSpace(total: 110 * gb, free: 0).advertised, 128 * gb);
+    expect(const StorageSpace(total: 238 * gb, free: 0).advertised, 256 * gb);
+    expect(const StorageSpace(total: 64 * gb, free: 0).advertised, 64 * gb);
   });
 }

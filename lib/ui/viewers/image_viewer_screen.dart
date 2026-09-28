@@ -161,12 +161,29 @@ class _ZoomableImageState extends State<_ZoomableImage> {
             maxScale: 8,
             onInteractionEnd: (_) => widget.onZoomChanged(_transform.value.getMaxScaleOnAxis() > 1.01),
             child: SizedBox.expand(
-              child: Image(image: snap.data!, fit: BoxFit.contain, errorBuilder: (_, _, _) => _error()),
+              child: Image(
+                // Decoding a 200 MP photo at full size needs ~800 MB. Twice the
+                // screen resolution keeps zoom sharp at a fraction of that.
+                image: ResizeImage(
+                  snap.data!,
+                  width: _decodeWidth(context),
+                  height: _decodeWidth(context),
+                  policy: ResizeImagePolicy.fit,
+                ),
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => _error(),
+              ),
             ),
           ),
         );
       },
     );
+  }
+
+  static int _decodeWidth(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final longest = size.longestSide * MediaQuery.devicePixelRatioOf(context) * 2;
+    return longest.clamp(1024, 4096).round();
   }
 
   Widget _error() => Center(

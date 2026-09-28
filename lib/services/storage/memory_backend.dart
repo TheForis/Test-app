@@ -55,6 +55,9 @@ class MemoryStorageBackend implements StorageBackend {
   Future<String> rootPath() async => '/';
 
   @override
+  Future<StorageSpace?> space() async => null;
+
+  @override
   Future<List<StorageLocation>> locations() async => [
     const StorageLocation(name: 'My files', path: '/', icon: Icons.cloud_rounded, isRoot: true),
     const StorageLocation(name: 'Downloads', path: '/Downloads', icon: Icons.download_rounded),
@@ -64,15 +67,17 @@ class MemoryStorageBackend implements StorageBackend {
 
   String _norm(String path) => _ctx.normalize(path.isEmpty ? '/' : path);
 
-  FileEntry _entry(String path, _Node node) => FileEntry(
+  FileEntry _entry(String path, _Node node, {bool showHidden = true}) => FileEntry(
     path: path,
     name: path == '/' ? 'My files' : _ctx.basename(path),
     isDirectory: node.isDirectory,
-    size: node.isDirectory ? _childCount(path) : node.bytes!.length,
+    size: node.isDirectory ? _childCount(path, showHidden: showHidden) : node.bytes!.length,
     modified: node.modified,
   );
 
-  int _childCount(String dir) => _nodes.keys.where((k) => k != dir && _ctx.dirname(k) == dir).length;
+  int _childCount(String dir, {bool showHidden = true}) => _nodes.keys
+      .where((k) => k != dir && _ctx.dirname(k) == dir && (showHidden || !_ctx.basename(k).startsWith('.')))
+      .length;
 
   @override
   Future<List<FileEntry>> list(String directory, {bool showHidden = false}) async {
@@ -82,12 +87,15 @@ class MemoryStorageBackend implements StorageBackend {
     return [
       for (final e in _nodes.entries)
         if (e.key != dir && _ctx.dirname(e.key) == dir && (showHidden || !_ctx.basename(e.key).startsWith('.')))
-          _entry(e.key, e.value),
+          _entry(e.key, e.value, showHidden: showHidden),
     ];
   }
 
   @override
-  Future<List<FileEntry>> scanAll({bool showHidden = false}) async => [
+  Future<(List<FileEntry>, DateTime)?> cachedIndex({bool showHidden = false}) async => null;
+
+  @override
+  Future<List<FileEntry>> scanAll({bool showHidden = false, bool full = false}) async => [
     for (final e in _nodes.entries)
       if (!e.value.isDirectory && (showHidden || !e.key.split('/').any((s) => s.startsWith('.'))))
         _entry(e.key, e.value),
@@ -106,6 +114,16 @@ class MemoryStorageBackend implements StorageBackend {
     if (node == null || node.isDirectory) throw FileSystemError('File not found: $path');
     return node.bytes!;
   }
+
+  @override
+  Future<Uint8List> readHead(String path, int maxBytes) async {
+    final bytes = await readBytes(path);
+    return bytes.length <= maxBytes ? bytes : Uint8List.sublistView(bytes, 0, maxBytes);
+  }
+
+  @override
+  Future<List<ArchiveListing>> listArchiveEntries(FileEntry archive) async =>
+      listArchive(decodeArchiveBytes(archive.name, await readBytes(archive.path)));
 
   void _ensureDir(String dir) {
     final n = _norm(dir);
