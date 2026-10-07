@@ -573,7 +573,7 @@ void main() {
   _framed('phone', const Size(540, 960), _Device.phone, [_home, _burrow, _browse, _find, _unzip, _dark, _private]);
   _framed('tablet-7', const Size(960, 540), _Device.foldable, [_home, _burrow, _browse, _find, _dark]);
   _framed('tablet-10', const Size(1280, 720), _Device.tablet, [_home, _burrow, _find, _browse, _dark]);
-  _framed('chromebook', const Size(960, 540), _Device.window, [_dark, _browse, _find]);
+  _framed('chromebook', const Size(960, 540), _Device.window, [_dark, _browse, _find, _unzip]);
 
   _raw('phone-home', const Size(360, 780), 3, _home);
   _raw('phone-home-dark', const Size(360, 780), 3, _dark);

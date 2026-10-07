@@ -58,4 +58,4 @@ File manager, Productivity, Tools
 - phone/ — 7 phone screenshots (1080×1920)
 - tablet-7/ — 5 screenshots for the 7-inch tablet slot (1920×1080)
 - tablet-10/ — 5 screenshots for the 10-inch tablet slot (2560×1440)
-- chromebook/ — 3 Chromebook screenshots (1920×1080)
+- chromebook/ — 4 Chromebook screenshots (1920×1080)
